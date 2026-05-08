@@ -1,5 +1,9 @@
 from machine import Pin
 import utime
+from machine import freq
+
+freq(250_000_000)   # 250 MHz
+print(freq())
 
 # WIRING
 # GP2 -> SER1 / DATA of shift register 1
@@ -23,6 +27,9 @@ BANDS = 8
 shift_period = 1  # seconds
 shift_period_half = shift_period / 2
 
+#clock delay in microseconds
+CLOCK_DELAY_US = 2
+
 # PIN SETUP
 SER1 = Pin(DATA_PIN1, Pin.OUT)
 SER2 = Pin(DATA_PIN2, Pin.OUT)
@@ -39,11 +46,11 @@ LATCH.value(1)
 LED.value(0)
 
 # Put latch into default LOW state after startup
-utime.sleep(shift_period_half)
+utime.sleep_us(CLOCK_DELAY_US)
 LATCH.value(0)
 
 # BAND TABLE (15-BIT, first bit becomes 0 when treated as 16-bit)
-# B1 = 920 MHz  -> 001110000011000
+# B1 = 920 MHz  -> 00011100 00011000
 # B2 = 978 MHz  -> 001100000011000
 # B3 = 1090 MHz -> 000110000001000
 # B4 = 1.15 GHz -> 000100000001000
@@ -60,7 +67,8 @@ table_bands = {
     5: 0b001010000010000,
     6: 0b001000000010000,
     7: 0b000010000000000,
-    8: 0b000000000000000
+    8: 0b000000000000000,
+    9: 0b1111111111111110
 }
 
 band_freqs = {
@@ -79,20 +87,20 @@ band_freqs = {
 def wait_button():
     while BUTTON.value() == 1:
         pass
-    utime.sleep(0.2)
+    utime.sleep_us(CLOCK_DELAY_US)
     while BUTTON.value() == 0:
         pass
-    utime.sleep(0.2)
+    utime.sleep_us(CLOCK_DELAY_US)
 
 def clock_pulse():
     CLK.value(1)
-    utime.sleep(shift_period_half)
+    utime.sleep_us(CLOCK_DELAY_US)
     CLK.value(0)
-    utime.sleep(shift_period_half)
+    utime.sleep_us(CLOCK_DELAY_US)
 
 def latch_pulse():
     LATCH.value(1)
-    utime.sleep(shift_period_half)
+    utime.sleep_us(CLOCK_DELAY_US)
     LATCH.value(0)
 
 # Test functions
@@ -106,12 +114,12 @@ def test_clock():
         CLK.value(1)
         LED.value(1)
         print("CLOCK HIGH")
-        utime.sleep(shift_period_half)
+        utime.sleep_us(CLOCK_DELAY_US)
 
         CLK.value(0)
         LED.value(0)
         print("CLOCK LOW")
-        utime.sleep(shift_period_half)
+        utime.sleep_us(CLOCK_DELAY_US)
 
 def test_latch():
     print("Testing LATCH pin...")
@@ -120,25 +128,25 @@ def test_latch():
     LATCH.value(1)
     LED.value(1)
     print("LATCH INITIAL HIGH")
-    utime.sleep(shift_period)
+    utime.sleep_us(CLOCK_DELAY_US)
 
     # Default LOW
     LATCH.value(0)
     LED.value(0)
     print("LATCH DEFAULT LOW")
-    utime.sleep(shift_period)
+    utime.sleep_us(CLOCK_DELAY_US)
 
     while True:
         wait_button()
         LATCH.value(1)
         LED.value(1)
         print("LATCH HIGH")
-        utime.sleep(shift_period_half)
+        utime.sleep_us(CLOCK_DELAY_US)
 
         LATCH.value(0)
         LED.value(0)
         print("LATCH LOW")
-        utime.sleep(shift_period_half)
+        utime.sleep_us(CLOCK_DELAY_US)
 
 def test_data():
     print("Testing DATA pin...")
@@ -167,7 +175,7 @@ def shift_out(data):  # 16-bit pattern split into two parallel 8-bit sends
     print(f"SER1 byte: {data1:08b}")
     print(f"SER2 byte: {data2:08b}")
 
-    for i in range(7, -1, -1):
+    for i in range(0, 8):
         bit1 = (data1 >> i) & 1
         bit2 = (data2 >> i) & 1
 
@@ -198,7 +206,7 @@ def test_all_bands():
     i = 1
     while i <= 8:
         send_band(i)
-        utime.sleep(shift_period)
+        utime.sleep_us(CLOCK_DELAY_US)
         i = i + 1
 
 def main():
