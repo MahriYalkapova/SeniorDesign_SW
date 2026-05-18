@@ -1,9 +1,7 @@
-from machine import Pin
+from machine import Pin, UART, freq
 import utime
-from machine import freq
 
-freq(250_000_000)   # 250 MHz
-print(freq())
+#freq(250_000_000)   # 250 MHz
 
 # WIRING
 # GP2 -> SER1 / DATA of shift register 1
@@ -19,6 +17,8 @@ DATA_PIN2 = 3
 CLOCK_PIN = 4
 LATCH_PIN = 5
 BUTTON_PIN = 15
+
+uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
 
 # Frequency Band Variable
 BANDS = 8
@@ -46,7 +46,8 @@ LATCH.value(1)
 LED.value(0)
 
 # Put latch into default LOW state after startup
-utime.sleep_us(CLOCK_DELAY_US)
+#utime.sleep_us(CLOCK_DELAY_US)
+utime.sleep(shift_period)
 LATCH.value(0)
 
 # BAND TABLE (15-BIT, first bit becomes 0 when treated as 16-bit)
@@ -84,23 +85,61 @@ band_freqs = {
 
 
 # Functions
+def listen_uart():
+    if uart.any() >= 4:
+        packet = uart.read(4)
+
+        if packet is None:
+            return
+
+        print("Received:", packet)
+
+        if len(packet) != 4:
+            print("Bad packet length")
+            return
+
+        start = packet[0]
+        cmd = packet[1]
+        value = packet[2]
+        end = packet[3]
+
+        if start != 0xAA or end != 0xFF:
+            print("Bad packet")
+            return
+
+        if cmd == 0x01:
+            print("Set band command:", value)
+            send_band(value)
+
+        elif cmd == 0x02:
+            print("All off command")
+            shift_out(0)
+
+        else:
+            print("Unknown command:", cmd)
+
 def wait_button():
     while BUTTON.value() == 1:
         pass
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
     while BUTTON.value() == 0:
         pass
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
 
 def clock_pulse():
     CLK.value(1)
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
     CLK.value(0)
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
 
 def latch_pulse():
     LATCH.value(1)
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
     LATCH.value(0)
 
 # Test functions
@@ -110,16 +149,18 @@ def test_clock():
     SER2.value(0)
 
     while True:
-        wait_button()
+        #wait_button()
         CLK.value(1)
         LED.value(1)
         print("CLOCK HIGH")
-        utime.sleep_us(CLOCK_DELAY_US)
+        #utime.sleep_us(CLOCK_DELAY_US)
+        utime.sleep(shift_period)
 
         CLK.value(0)
         LED.value(0)
         print("CLOCK LOW")
-        utime.sleep_us(CLOCK_DELAY_US)
+        #utime.sleep_us(CLOCK_DELAY_US)
+        utime.sleep(shift_period)
 
 def test_latch():
     print("Testing LATCH pin...")
@@ -128,25 +169,29 @@ def test_latch():
     LATCH.value(1)
     LED.value(1)
     print("LATCH INITIAL HIGH")
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
 
     # Default LOW
     LATCH.value(0)
     LED.value(0)
     print("LATCH DEFAULT LOW")
-    utime.sleep_us(CLOCK_DELAY_US)
+    #utime.sleep_us(CLOCK_DELAY_US)
+    utime.sleep(shift_period)
 
     while True:
         wait_button()
         LATCH.value(1)
         LED.value(1)
         print("LATCH HIGH")
-        utime.sleep_us(CLOCK_DELAY_US)
+        #utime.sleep_us(CLOCK_DELAY_US)
+        utime.sleep(shift_period)
 
         LATCH.value(0)
         LED.value(0)
         print("LATCH LOW")
-        utime.sleep_us(CLOCK_DELAY_US)
+        #utime.sleep_us(CLOCK_DELAY_US)
+        utime.sleep(shift_period)
 
 def test_data():
     print("Testing DATA pin...")
@@ -206,18 +251,26 @@ def test_all_bands():
     i = 1
     while i <= 8:
         send_band(i)
-        utime.sleep_us(CLOCK_DELAY_US)
+        #utime.sleep_us(CLOCK_DELAY_US)
+        utime.sleep(shift_period)
         i = i + 1
 
 def main():
-    # test_clock()
-    # test_data()
-    # test_latch()
+    #test_clock()
+    #test_data()
+    #test_latch()
 
-    band = int(input("Enter band number (1-8): "))
-    send_band(band)
+    #band = int(input("Enter band number (1-8): "))
+    #send_band(band)
 
     # test_all_bands()
 
+    print("Regular Pico UART listener started")
+    print("Waiting for commands...")
+
+    while True:
+        listen_uart()
+        utime.sleep_ms(1)
+    
 if __name__ == "__main__":
     main()
